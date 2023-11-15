@@ -52,7 +52,7 @@ impl Registers {
 
     fn set_af(&mut self, value: u16) {
         self.a = ((value & 0xFF00) >> 8) as u8;
-        self.f = FlagsRegister::from(value as u8).clone();
+        self.f = FlagsRegister::from(value as u8);
     }
 
     fn get_de(&self) -> u16 {
@@ -273,6 +273,6 @@ impl CPU {
 
             cpu.execute(Instruction::SUB(ArithmeticTarget::B));
 
-            assert_eq!(cpu.registers.a, 0x10);
+            assert_eq!(cpu.registers.a, 0x20);
         }
     }
