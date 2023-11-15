@@ -1,6 +1,7 @@
 enum Instruction {
     ADD(ArithmeticTarget),
-    }
+    SUB(ArithmeticTarget),
+}
     
 enum ArithmeticTarget {
     A, B, C, D, E, H, L,
@@ -12,7 +13,7 @@ struct Registers {
     c: u8,
     d: u8,
     e: u8,
-    f: u8,
+    f: FlagsRegister,
     h: u8,
     l: u8,
 }
@@ -46,12 +47,12 @@ impl Registers {
     }
 
     fn get_af(&self) -> u16 {
-        (self.a as u16) << 8 | self.f as u16
+        (self.a as u16) << 8 | u16::from(self.f)
     }
 
     fn set_af(&mut self, value: u16) {
         self.a = ((value & 0xFF00) >> 8) as u8;
-        self.f = (value & 0xFF) as u8;
+        self.f = FlagsRegister::from(value as u8).clone();
     }
 
     fn get_de(&self) -> u16 {
@@ -73,6 +74,7 @@ impl Registers {
     }
 }
 
+#[derive(Clone, Copy)]
 struct FlagsRegister {
     zero: bool,
     subtract: bool,
@@ -110,6 +112,15 @@ impl std::convert::From<u8> for FlagsRegister {
     }
 }
 
+impl std::convert::From<FlagsRegister> for u16 {
+    fn from(flag: FlagsRegister) -> Self {
+        ((flag.zero as u16) << ZERO_FLAG_BYTE_POSITION) |
+        ((flag.subtract as u16) << SUBTRACT_FLAG_BYTE_POSITION) |
+        ((flag.half_carry as u16) << HALF_CARRY_FLAG_BYTE_POSITION) |
+        ((flag.carry as u16) << CARRY_FLAG_BYTE_POSITION)
+    }
+}
+
 impl CPU {
 
     pub fn new() -> CPU {
@@ -120,7 +131,7 @@ impl CPU {
                 c: 0,
                 d: 0,
                 e: 0,
-                f: 0,
+                f: FlagsRegister { zero: false, subtract: false, half_carry: false, carry: false },
                 h: 0,
                 l: 0,
             },
@@ -170,22 +181,71 @@ impl CPU {
                 _ => { /* TODO: support more targets */ }
             }
           }
+          Instruction::SUB(target) => {
+            match target {
+                ArithmeticTarget::A => {
+                    self.registers.a = 0;
+                }
+                ArithmeticTarget::B => {
+                    let value = self.registers.b;
+                    let new_value = self.sub(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::C => {
+                    let value = self.registers.c;
+                    let new_value = self.sub(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::D => {
+                    let value = self.registers.d;
+                    let new_value = self.sub(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::E => {
+                    let value = self.registers.e;
+                    let new_value = self.sub(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::H => {
+                    let value = self.registers.h;
+                    let new_value = self.sub(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::L => {
+                    let value = self.registers.l;
+                    let new_value = self.sub(value);
+                    self.registers.a = new_value;
+                }
+                _ => {/* not sure what else there is */}
+            }
+          }
           _ => { /* TODO: support more instructions */ }
         }
       }
     
     fn add(&mut self, value: u8) -> u8 {
         let (new_value, did_overflow) = self.registers.a.overflowing_add(value);
-        // TODO: set flags
-        // self.registers.f.zero = new_value == 0;
-        // self.registers.f.subtract = false;
-        // self.registers.f.carry = did_overflow;
-        // // Half Carry is set if adding the lower nibbles of the value and register A
-        // // together result in a value bigger than 0xF. If the result is larger than 0xF
-        // // than the addition caused a carry from the lower nibble to the upper nibble.
-        // self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
+        //TODO: set flags
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.carry = did_overflow;
+        // Half Carry is set if adding the lower nibbles of the value and register A
+        // together result in a value bigger than 0xF. If the result is larger than 0xF
+        // than the addition caused a carry from the lower nibble to the upper nibble.
+        self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
         new_value
         }
+
+    fn sub(&mut self, value: u8) -> u8 {
+        let (new_value, did_underflow) = self.registers.a.overflowing_sub(value); 
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = true;
+        self.registers.f.carry = did_underflow;
+
+        self.registers.f.half_carry = (value & 0xF) > (self.registers.a & 0xF);
+
+        new_value
+    }
     }
 
     #[cfg(test)]
@@ -203,5 +263,16 @@ impl CPU {
     
             // Assert the expected results
             assert_eq!(cpu.registers.a, 0x30);
+        }
+
+        #[test]
+        fn test_sub_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0x30;
+            cpu.registers.b = 0x10;
+
+            cpu.execute(Instruction::SUB(ArithmeticTarget::B));
+
+            assert_eq!(cpu.registers.a, 0x10);
         }
     }
