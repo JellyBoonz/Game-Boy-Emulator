@@ -1,6 +1,7 @@
 enum Instruction {
     ADD(ArithmeticTarget),
     SUB(ArithmeticTarget),
+    ADC(ArithmeticTarget),
 }
     
 enum ArithmeticTarget {
@@ -181,6 +182,45 @@ impl CPU {
                 _ => { /* TODO: support more targets */ }
             }
           }
+          Instruction::ADC(target) => {
+            match target {
+                ArithmeticTarget::A => {
+                    let value = self.registers.a;
+                    let new_value = self.adc(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::B => {
+                    let value = self.registers.b;
+                    let new_value = self.adc(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::C => {
+                    let value = self.registers.c;
+                    let new_value = self.adc(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::D => {
+                    let value = self.registers.d;
+                    let new_value = self.adc(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::E => {
+                    let value = self.registers.e;
+                    let new_value = self.adc(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::H => {
+                    let value = self.registers.h;
+                    let new_value = self.adc(value);
+                    self.registers.a = new_value;
+                }
+                ArithmeticTarget::L => {
+                    let value = self.registers.l;
+                    let new_value = self.adc(value);
+                    self.registers.a = new_value;
+                } 
+            }
+          }
           Instruction::SUB(target) => {
             match target {
                 ArithmeticTarget::A => {
@@ -234,7 +274,23 @@ impl CPU {
         // than the addition caused a carry from the lower nibble to the upper nibble.
         self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
         new_value
+    }
+    fn adc(&mut self, value: u8) -> u8 {
+        let carry = if self.registers.f.carry { 1 } else { 0 };
+        let (new_value, did_overflow) = self.registers.a.overflowing_add(value + carry);
+        //TODO: set flags
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.carry = did_overflow;
+        // Half Carry is set if adding the lower nibbles of the value and register A
+        // together result in a value bigger than 0xF. If the result is larger than 0xF
+        // than the addition caused a carry from the lower nibble to the upper nibble.
+        self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
+        if(self.registers.f.carry) {
+            return new_value;
         }
+        new_value 
+    }
 
     fn sub(&mut self, value: u8) -> u8 {
         let (new_value, did_underflow) = self.registers.a.overflowing_sub(value); 
@@ -263,6 +319,23 @@ impl CPU {
     
             // Assert the expected results
             assert_eq!(cpu.registers.a, 0x30);
+        }
+
+        #[test]
+        fn test_adc_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0xFF; // Set A to the maximum value
+            cpu.registers.f.carry = true; // Set carry flag to true
+
+            // Arbitrary target
+            cpu.execute(Instruction::ADC(ArithmeticTarget::C));
+
+            // Assert the expected results
+            // Since A is already at its maximum value and there's a carry,
+            // the result should wrap around to 0, and the carry flag should be set.
+            assert_eq!(cpu.registers.a, 0x00);
+            assert_eq!(cpu.registers.f.carry, true);
+            // TODO: Add more assertions for other flags and values as needed
         }
 
         #[test]
