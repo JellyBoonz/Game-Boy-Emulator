@@ -1,7 +1,10 @@
 enum Instruction {
     ADD(ArithmeticTarget),
-    SUB(ArithmeticTarget),
     ADC(ArithmeticTarget),
+    ADDHL(ArithmeticTarget),
+    AND(ArithmeticTarget),
+    SUB(ArithmeticTarget),
+    SBC(ArithmeticTarget)
 }
     
 enum ArithmeticTarget {
@@ -123,7 +126,6 @@ impl std::convert::From<FlagsRegister> for u16 {
 }
 
 impl CPU {
-
     pub fn new() -> CPU {
         CPU {
             registers: Registers {
@@ -140,169 +142,110 @@ impl CPU {
             bus: MemoryBus { memory: [0; 0xFFFF] },
         }
     }
+
     fn execute(&mut self, instruction: Instruction) {
         match instruction {
-          Instruction::ADD(target) => {
-            match target {
-                ArithmeticTarget::A => {
-                    let value = self.registers.a;
-                    let new_value = self.add(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::B => {
-                    let value = self.registers.b;
-                    let new_value = self.add(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::C => {
-                    let value = self.registers.c;
-                    let new_value = self.add(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::D => {
-                    let value = self.registers.d;
-                    let new_value = self.add(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::E => {
-                    let value = self.registers.e;
-                    let new_value = self.add(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::H => {
-                    let value = self.registers.h;
-                    let new_value = self.add(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::L => {
-                    let value = self.registers.l;
-                    let new_value = self.add(value);
-                    self.registers.a = new_value;
-                }
-                _ => { /* TODO: support more targets */ }
-            }
-          }
-          Instruction::ADC(target) => {
-            match target {
-                ArithmeticTarget::A => {
-                    let value = self.registers.a;
-                    let new_value = self.adc(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::B => {
-                    let value = self.registers.b;
-                    let new_value = self.adc(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::C => {
-                    let value = self.registers.c;
-                    let new_value = self.adc(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::D => {
-                    let value = self.registers.d;
-                    let new_value = self.adc(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::E => {
-                    let value = self.registers.e;
-                    let new_value = self.adc(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::H => {
-                    let value = self.registers.h;
-                    let new_value = self.adc(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::L => {
-                    let value = self.registers.l;
-                    let new_value = self.adc(value);
-                    self.registers.a = new_value;
-                } 
-            }
-          }
-          Instruction::SUB(target) => {
-            match target {
-                ArithmeticTarget::A => {
-                    self.registers.a = 0;
-                }
-                ArithmeticTarget::B => {
-                    let value = self.registers.b;
-                    let new_value = self.sub(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::C => {
-                    let value = self.registers.c;
-                    let new_value = self.sub(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::D => {
-                    let value = self.registers.d;
-                    let new_value = self.sub(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::E => {
-                    let value = self.registers.e;
-                    let new_value = self.sub(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::H => {
-                    let value = self.registers.h;
-                    let new_value = self.sub(value);
-                    self.registers.a = new_value;
-                }
-                ArithmeticTarget::L => {
-                    let value = self.registers.l;
-                    let new_value = self.sub(value);
-                    self.registers.a = new_value;
-                }
-                _ => {/* not sure what else there is */}
-            }
-          }
-          _ => { /* TODO: support more instructions */ }
+            Instruction::ADD(target) => self.add(target),
+            Instruction::ADC(target) => self.adc(target),
+            Instruction::ADDHL(target) => self.add_hl(target),
+            Instruction::AND(target) => self.and(target),
+            Instruction::SUB(target) => self.sub(target),
+            Instruction::SBC(target) => self.sbc(target),
+            // Add more instructions as needed
+            _ => {} // Ignore unsupported instructions for now
         }
-      }
-    
-    fn add(&mut self, value: u8) -> u8 {
-        let (new_value, did_overflow) = self.registers.a.overflowing_add(value);
-        //TODO: set flags
-        self.registers.f.zero = new_value == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.carry = did_overflow;
-        // Half Carry is set if adding the lower nibbles of the value and register A
-        // together result in a value bigger than 0xF. If the result is larger than 0xF
-        // than the addition caused a carry from the lower nibble to the upper nibble.
-        self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
-        new_value
-    }
-    fn adc(&mut self, value: u8) -> u8 {
-        let carry = if self.registers.f.carry { 1 } else { 0 };
-        let (new_value, did_overflow) = self.registers.a.overflowing_add(value + carry);
-        //TODO: set flags
-        self.registers.f.zero = new_value == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.carry = did_overflow;
-        // Half Carry is set if adding the lower nibbles of the value and register A
-        // together result in a value bigger than 0xF. If the result is larger than 0xF
-        // than the addition caused a carry from the lower nibble to the upper nibble.
-        self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
-        if(self.registers.f.carry) {
-            return new_value;
-        }
-        new_value 
     }
 
-    fn sub(&mut self, value: u8) -> u8 {
-        let (new_value, did_underflow) = self.registers.a.overflowing_sub(value); 
-        self.registers.f.zero = new_value == 0;
+    fn add(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        let (new_value, did_overflow) = self.registers.a.overflowing_add(value);
+        self.update_flags_add(value, new_value, did_overflow);
+        self.set_register_value(ArithmeticTarget::A, new_value);
+    }
+
+    fn adc(&mut self, target: ArithmeticTarget) {
+        let carry = if self.registers.f.carry { 1 } else { 0 };
+        let value = self.get_register_value(target);
+        let (new_value, did_overflow) = self.registers.a.overflowing_add(value + carry);
+        self.update_flags_add(value, new_value, did_overflow);
+        self.set_register_value(ArithmeticTarget::A, new_value);
+    }
+
+    fn add_hl(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        let hl = self.registers.get_hl();
+        let (result, did_overflow) = hl.overflowing_add(value as u16);
+
+        // Update HL register
+        self.registers.set_hl(result);
+
+        // Set flags if needed (similar to the add function)
+    }
+
+    fn and(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        self.set_register_value(ArithmeticTarget::A, self.registers.a & value);
+    }
+
+    fn sub(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        let (new_value, did_underflow) = self.registers.a.overflowing_sub(value);
+        self.set_register_value(ArithmeticTarget::A, new_value);
+        self.update_flags_sub(value, new_value, did_underflow);
+    }
+
+    fn sbc(&mut self, target: ArithmeticTarget) {
+        let carry = if self.registers.f.carry { 1 } else { 0 };
+        let value = self.get_register_value(target);
+        let (new_value, did_underflow) = self.registers.a.overflowing_sub(value + carry);
+        self.set_register_value(ArithmeticTarget::A, new_value);
+        self.update_flags_sub(value, new_value, did_underflow);
+    }
+
+    // Other helper functions
+    fn get_register_value(&self, target: ArithmeticTarget) -> u8 {
+        match target {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+        }
+    }
+
+    fn set_register_value(&mut self, target: ArithmeticTarget, value: u8) {
+        match target {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+        }
+    }
+
+    fn update_flags_add(&mut self, operand: u8, result: u8, did_overflow: bool) {
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.carry = did_overflow;
+        // Half Carry is set if adding the lower nibbles of the value and register A
+        // together result in a value bigger than 0xF. If the result is larger than 0xF
+        // than the addition caused a carry from the lower nibble to the upper nibble.
+        self.registers.f.half_carry = (self.registers.a & 0xF) + (operand & 0xF) > 0xF;
+    }
+
+    fn update_flags_sub(&mut self, operand: u8, result: u8, did_underflow: bool) {
+        self.registers.f.zero = result == 0;
         self.registers.f.subtract = true;
         self.registers.f.carry = did_underflow;
 
-        self.registers.f.half_carry = (value & 0xF) > (self.registers.a & 0xF);
+        self.registers.f.half_carry = (operand & 0xF) > (self.registers.a & 0xF)
+    }
+}
 
-        new_value
-    }
-    }
 
     #[cfg(test)]
     mod tests {
@@ -348,4 +291,49 @@ impl CPU {
 
             assert_eq!(cpu.registers.a, 0x20);
         }
+
+        #[test]
+        fn test_sbc_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0x30;
+            cpu.registers.b = 0x10;
+            cpu.registers.f.carry = true;
+
+            cpu.execute(Instruction::SBC(ArithmeticTarget::B));
+            
+
+            assert_eq!(cpu.registers.a, 0x1F);
+        }
+
+        #[test]
+        fn test_addhl_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.set_hl(0x0011);
+            cpu.registers.b = 0x01;
+
+            // Call the function that executes the ADDHL instruction with, for example, ArithmeticTarget::B
+            cpu.execute(Instruction::ADDHL(ArithmeticTarget::B));
+
+            // Assert the expected results
+            // Adjust the expected values based on your specific test case
+            assert_eq!(cpu.registers.get_hl(), 0x0012);
+            // TODO: Add more assertions for other flags and values as needed
+        }
+
+        #[test]
+        fn test_and_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0b0110;
+            cpu.registers.b = 0b1100;
+
+            // Call the function that executes the ADDHL instruction with, for example, ArithmeticTarget::B
+            cpu.execute(Instruction::AND(ArithmeticTarget::B));
+
+            // Assert the expected results
+            // Adjust the expected values based on your specific test case
+            assert_eq!(cpu.registers.a, 0b0100);
+            // TODO: Add more assertions for other flags and values as needed
+        }
+
+
     }
