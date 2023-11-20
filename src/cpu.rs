@@ -3,10 +3,15 @@ enum Instruction {
     ADC(ArithmeticTarget),
     ADDHL(ArithmeticTarget),
     AND(ArithmeticTarget),
+    DEC(ArithmeticTarget),
+    INC(ArithmeticTarget),
+    OR(ArithmeticTarget),
     SUB(ArithmeticTarget),
-    SBC(ArithmeticTarget)
+    SBC(ArithmeticTarget),
+    XOR(ArithmeticTarget)
 }
-    
+
+#[derive(Clone, Copy)] 
 enum ArithmeticTarget {
     A, B, C, D, E, H, L,
 }
@@ -149,8 +154,12 @@ impl CPU {
             Instruction::ADC(target) => self.adc(target),
             Instruction::ADDHL(target) => self.add_hl(target),
             Instruction::AND(target) => self.and(target),
+            Instruction::DEC(target) => self.dec(target),
+            Instruction::INC(target) => self.inc(target),
+            Instruction::OR(target) => self.or(target),
             Instruction::SUB(target) => self.sub(target),
             Instruction::SBC(target) => self.sbc(target),
+            Instruction::XOR(target) => self.xor(target),
             // Add more instructions as needed
             _ => {} // Ignore unsupported instructions for now
         }
@@ -180,11 +189,45 @@ impl CPU {
         self.registers.set_hl(result);
 
         // Set flags if needed (similar to the add function)
+        self.update_flags_add_16_bit(value, result, did_overflow);
     }
 
     fn and(&mut self, target: ArithmeticTarget) {
         let value = self.get_register_value(target);
-        self.set_register_value(ArithmeticTarget::A, self.registers.a & value);
+        let result = self.registers.a & value;
+        self.set_register_value(ArithmeticTarget::A, result);
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = true;
+        self.registers.f.carry = false
+    }
+
+    fn dec(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        let new_value = value.wrapping_sub(1);
+        self.set_register_value(target, new_value);
+
+        self.update_flags_sub(value, new_value, false)
+    }
+
+    fn inc(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        let new_value = value.wrapping_add(1);
+        self.set_register_value(target, new_value);
+
+        self.update_flags_add(value, new_value, false)
+    }
+
+    fn or(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        let result = self.registers.a | value;
+        self.set_register_value(ArithmeticTarget::A, result);
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = false
     }
 
     fn sub(&mut self, target: ArithmeticTarget) {
@@ -200,6 +243,17 @@ impl CPU {
         let (new_value, did_underflow) = self.registers.a.overflowing_sub(value + carry);
         self.set_register_value(ArithmeticTarget::A, new_value);
         self.update_flags_sub(value, new_value, did_underflow);
+    }
+
+    fn xor(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        let result = self.registers.a ^ value;
+        self.set_register_value(ArithmeticTarget::A, result);
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = false 
     }
 
     // Other helper functions
@@ -237,6 +291,16 @@ impl CPU {
         self.registers.f.half_carry = (self.registers.a & 0xF) + (operand & 0xF) > 0xF;
     }
 
+    fn update_flags_add_16_bit(&mut self, operand: u8, result: u16, did_overflow: bool) {
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.carry = did_overflow;
+        // Half Carry is set if adding the lower nibbles of the value and register A
+        // together result in a value bigger than 0xF. If the result is larger than 0xF
+        // than the addition caused a carry from the lower nibble to the upper nibble.
+        self.registers.f.half_carry = (self.registers.a & 0xF) + (operand & 0xF) > 0xF;
+    }
+
     fn update_flags_sub(&mut self, operand: u8, result: u8, did_underflow: bool) {
         self.registers.f.zero = result == 0;
         self.registers.f.subtract = true;
@@ -263,46 +327,22 @@ impl CPU {
             // Assert the expected results
             assert_eq!(cpu.registers.a, 0x30);
         }
-
+        
         #[test]
         fn test_adc_instruction() {
             let mut cpu = CPU::new();
             cpu.registers.a = 0xFF; // Set A to the maximum value
             cpu.registers.f.carry = true; // Set carry flag to true
-
+            
             // Arbitrary target
             cpu.execute(Instruction::ADC(ArithmeticTarget::C));
-
+            
             // Assert the expected results
             // Since A is already at its maximum value and there's a carry,
             // the result should wrap around to 0, and the carry flag should be set.
             assert_eq!(cpu.registers.a, 0x00);
             assert_eq!(cpu.registers.f.carry, true);
             // TODO: Add more assertions for other flags and values as needed
-        }
-
-        #[test]
-        fn test_sub_instruction() {
-            let mut cpu = CPU::new();
-            cpu.registers.a = 0x30;
-            cpu.registers.b = 0x10;
-
-            cpu.execute(Instruction::SUB(ArithmeticTarget::B));
-
-            assert_eq!(cpu.registers.a, 0x20);
-        }
-
-        #[test]
-        fn test_sbc_instruction() {
-            let mut cpu = CPU::new();
-            cpu.registers.a = 0x30;
-            cpu.registers.b = 0x10;
-            cpu.registers.f.carry = true;
-
-            cpu.execute(Instruction::SBC(ArithmeticTarget::B));
-            
-
-            assert_eq!(cpu.registers.a, 0x1F);
         }
 
         #[test]
@@ -334,6 +374,70 @@ impl CPU {
             assert_eq!(cpu.registers.a, 0b0100);
             // TODO: Add more assertions for other flags and values as needed
         }
+        
+        #[test]
+        fn test_dec_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0b0011; // Result is more clear with binary
 
+            cpu.execute(Instruction::DEC(ArithmeticTarget::A));
 
+            assert_eq!(cpu.registers.a, 0b0010);
+        }
+
+        #[test]
+        fn test_inc_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0b0011; // Result is more clear with binary
+
+            cpu.execute(Instruction::INC(ArithmeticTarget::A));
+
+            assert_eq!(cpu.registers.a, 0b0100);
+        }
+
+        #[test]
+        fn test_or_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0b0001;
+            cpu.registers.b = 0b0100;
+
+            cpu.execute(Instruction::OR(ArithmeticTarget::B));
+
+            assert_eq!(cpu.registers.a, 0b0101)
+        }
+
+        #[test]
+        fn test_sub_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0x30;
+            cpu.registers.b = 0x10;
+
+            cpu.execute(Instruction::SUB(ArithmeticTarget::B));
+
+            assert_eq!(cpu.registers.a, 0x20);
+        }
+
+        #[test]
+        fn test_sbc_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0x30;
+            cpu.registers.b = 0x10;
+            cpu.registers.f.carry = true;
+
+            cpu.execute(Instruction::SBC(ArithmeticTarget::B));
+            
+
+            assert_eq!(cpu.registers.a, 0x1F);
+        }
+
+        #[test]
+        fn test_xor_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0b0011;
+            cpu.registers.b = 0b0101;
+
+            cpu.execute(Instruction::XOR(ArithmeticTarget::B));
+
+            assert_eq!(cpu.registers.a, 0b0110);
+        }
     }
