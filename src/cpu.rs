@@ -3,6 +3,8 @@ enum Instruction {
     ADC(ArithmeticTarget),
     ADDHL(ArithmeticTarget),
     AND(ArithmeticTarget),
+    CCF(),
+    CP(ArithmeticTarget),
     DEC(ArithmeticTarget),
     INC(ArithmeticTarget),
     OR(ArithmeticTarget),
@@ -154,6 +156,8 @@ impl CPU {
             Instruction::ADC(target) => self.adc(target),
             Instruction::ADDHL(target) => self.add_hl(target),
             Instruction::AND(target) => self.and(target),
+            Instruction::CCF() => self.ccf(),
+            Instruction::CP(target) => self.cp(target),
             Instruction::DEC(target) => self.dec(target),
             Instruction::INC(target) => self.inc(target),
             Instruction::OR(target) => self.or(target),
@@ -201,6 +205,17 @@ impl CPU {
         self.registers.f.subtract = false;
         self.registers.f.half_carry = true;
         self.registers.f.carry = false
+    }
+
+    fn ccf(&mut self) {
+        self.registers.f.carry = if self.registers.f.carry {false} else {true};
+    }
+
+    fn cp(&mut self, target: ArithmeticTarget) {
+        let value = self.get_register_value(target);
+        let (result, did_overflow) = self.registers.a.overflowing_sub(value);
+
+        self.update_flags_sub(value, result, did_overflow)
     }
 
     fn dec(&mut self, target: ArithmeticTarget) {
@@ -366,15 +381,36 @@ impl CPU {
             cpu.registers.a = 0b0110;
             cpu.registers.b = 0b1100;
 
-            // Call the function that executes the ADDHL instruction with, for example, ArithmeticTarget::B
-            cpu.execute(Instruction::AND(ArithmeticTarget::B));
-
             // Assert the expected results
+            cpu.execute(Instruction::AND(ArithmeticTarget::B));
             // Adjust the expected values based on your specific test case
             assert_eq!(cpu.registers.a, 0b0100);
             // TODO: Add more assertions for other flags and values as needed
         }
+
+        #[test]
+        fn test_ccf_instruction() {
+            let mut cpu = CPU::new();
+            
+            cpu.execute(Instruction::CCF());
+
+            assert_eq!(cpu.registers.f.carry, true);
+        }
         
+        #[test]
+        fn test_cp_instruction() {
+            let mut cpu = CPU::new();
+            cpu.registers.a = 0x30;
+            cpu.registers.b = 0x10;
+
+            cpu.execute(Instruction::CP(ArithmeticTarget::B));
+
+            assert_eq!(cpu.registers.f.zero, false); // The result is not zero
+            assert_eq!(cpu.registers.f.subtract, true); // It's a subtraction operation
+            assert_eq!(cpu.registers.f.half_carry, false); // No borrow from bit 3
+            assert_eq!(cpu.registers.f.carry, false); // No underflow
+        }
+
         #[test]
         fn test_dec_instruction() {
             let mut cpu = CPU::new();
